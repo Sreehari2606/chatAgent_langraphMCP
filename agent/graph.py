@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from agent.state import CodeAgentState
-from agent.constants import Intent
+from agent.constants import Intent, get_routing_map
 from agent.nodes import (
     intent_decision_node, understanding_node, planning_node, code_generation_node,
     explanation_node, debug_node, common_node, safety_check_node, folder_list_node,
@@ -35,20 +35,7 @@ def route_intent(state: CodeAgentState) -> str:
 graph.add_edge(START, "intent")
 graph.add_edge("intent", "safety")
 
-graph.add_conditional_edges("safety", route_intent, {
-    Intent.GENERATE.value: "understand",
-    Intent.DEBUG.value: "debug",
-    Intent.EXPLAIN.value: "explain",
-    Intent.COMMON.value: "common",
-    Intent.FOLDER_LIST.value: "folder_list",
-    Intent.FILE_READ.value: "file_read",
-    Intent.FILE_EDIT.value: "file_edit",
-    Intent.CODE_REVIEW.value: "code_review",
-    Intent.REFACTOR.value: "refactor",
-    Intent.TEST_GEN.value: "test_gen",
-    Intent.DOCUMENTATION.value: "documentation",
-    Intent.OPTIMIZE.value: "optimize",
-})
+graph.add_conditional_edges("safety", route_intent, get_routing_map())
 
 graph.add_edge("understand", "plan")
 graph.add_edge("plan", "generate_code")

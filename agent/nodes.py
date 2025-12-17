@@ -4,10 +4,7 @@ import logging
 from typing import Optional
 from agent.state import CodeAgentState
 from agent.llm import llm_invoke
-from agent.constants import (
-    Intent, BLOCKED_PATHS, CODE_EXTENSIONS, FILE_PATTERNS,
-    REVIEW_PATTERNS, REFACTOR_PATTERNS, TEST_PATTERNS, DOC_PATTERNS, OPTIMIZE_PATTERNS,
-)
+from agent.constants import Intent, BLOCKED_PATHS, CODE_EXTENSIONS, INTENT_ROUTER
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -48,24 +45,14 @@ def matches_patterns(text: str, patterns: list) -> bool:
 def intent_decision_node(state: CodeAgentState) -> CodeAgentState:
     user_query = state.get("user_query", "")
     logger.info(f"Processing intent for query: {user_query[:50]}...")
-    if matches_patterns(user_query, FILE_PATTERNS):
-        state["intent"] = Intent.FILE_READ.value
-        return state
-    if matches_patterns(user_query, REVIEW_PATTERNS):
-        state["intent"] = Intent.CODE_REVIEW.value
-        return state
-    if matches_patterns(user_query, REFACTOR_PATTERNS):
-        state["intent"] = Intent.REFACTOR.value
-        return state
-    if matches_patterns(user_query, TEST_PATTERNS):
-        state["intent"] = Intent.TEST_GEN.value
-        return state
-    if matches_patterns(user_query, DOC_PATTERNS):
-        state["intent"] = Intent.DOCUMENTATION.value
-        return state
-    if matches_patterns(user_query, OPTIMIZE_PATTERNS):
-        state["intent"] = Intent.OPTIMIZE.value
-        return state
+    
+    sorted_intents = sorted(INTENT_ROUTER.items(), key=lambda x: x[1]["priority"])
+    for intent, config in sorted_intents:
+        if config["patterns"] and matches_patterns(user_query, config["patterns"]):
+            state["intent"] = intent.value
+            logger.info(f"Matched intent: {intent.value}")
+            return state
+    
     prompt = f"""Classify this coding request into ONE category:
 - generate: create new code
 - debug: fix bugs or errors
@@ -83,6 +70,7 @@ Request: {user_query}"""
     response = get_llm_response(prompt).strip().lower()
     valid_intents = [i.value for i in Intent]
     state["intent"] = response if response in valid_intents else Intent.GENERATE.value
+    logger.info(f"LLM classified intent: {state['intent']}")
     return state
 
 def safety_check_node(state: CodeAgentState) -> CodeAgentState:
