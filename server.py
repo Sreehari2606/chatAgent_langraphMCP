@@ -34,10 +34,44 @@ def chat():
         if file_content:
             initial_state["file_content"] = file_content
         result = code_agent.invoke(initial_state)
-        response = result.get("llm_result", "No response generated.")
-        return jsonify({'response': response})
+        response_data = {
+            'response': result.get("llm_result", "No response generated."),
+            'confidence': result.get("confidence", 0.7),
+            'intent': result.get("intent", "unknown"),
+            'needs_clarification': result.get("needs_clarification", False),
+            'clarification_question': result.get("clarification_question", ""),
+            'pending_action': result.get("pending_action"),
+            'action_data': result.get("action_data"),
+        }
+        return jsonify(response_data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/confirm', methods=['POST'])
+def confirm_action():
+    data = request.json
+    action = data.get('action', '')
+    action_data = data.get('action_data', {})
+    
+    if action == 'accept':
+        code = action_data.get('code', '')
+        path = action_data.get('path', '')
+        action_type = action_data.get('type', '')
+        
+        if path and code:
+            try:
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(code)
+                return jsonify({'success': True, 'message': f'✅ Changes applied to {path}'})
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
+        else:
+            return jsonify({'success': True, 'message': f'✅ {action_type.title()} changes accepted'})
+    
+    elif action == 'reject':
+        return jsonify({'success': True, 'message': '❌ Changes rejected'})
+    
+    return jsonify({'error': 'Invalid action'}), 400
 
 @app.route('/api/files', methods=['GET'])
 def list_files():

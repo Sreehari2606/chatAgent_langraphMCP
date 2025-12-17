@@ -5,7 +5,7 @@ from agent.nodes import (
     intent_decision_node, understanding_node, planning_node, code_generation_node,
     explanation_node, debug_node, common_node, safety_check_node, folder_list_node,
     file_read_node, file_edit_node, confirm_node, write_file_node, code_review_node,
-    refactor_node, test_generation_node, documentation_node, optimize_node,
+    refactor_node, test_generation_node, documentation_node, optimize_node, clarify_node,
 )
 
 graph = StateGraph(CodeAgentState)
@@ -28,6 +28,7 @@ graph.add_node("file_read", file_read_node)
 graph.add_node("file_edit", file_edit_node)
 graph.add_node("confirm", confirm_node)
 graph.add_node("write_file", write_file_node)
+graph.add_node("clarify", clarify_node)
 
 def route_intent(state: CodeAgentState) -> str:
     return state.get("intent", Intent.GENERATE.value)
@@ -53,5 +54,6 @@ graph.add_edge("refactor", END)
 graph.add_edge("test_gen", END)
 graph.add_edge("documentation", END)
 graph.add_edge("optimize", END)
+graph.add_edge("clarify", END)
 
 code_agent = graph.compile()

@@ -14,3 +14,8 @@ class CodeAgentState(TypedDict, total=False):
     language: Optional[str]
     error: Optional[str]
     conversation_history: Optional[List[dict]]
+    confidence: Optional[float]
+    needs_clarification: Optional[bool]
+    clarification_question: Optional[str]
+    pending_action: Optional[str]
+    action_data: Optional[dict]
