@@ -1,11 +1,13 @@
 from flask import Flask, request, jsonify, send_from_directory
-from agent.graph import code_agent
+from agent.graph import will_of_code as code_agent
+from agent.mcp_client import list_mcp_tools, call_mcp_tool_sync
+from langgraph.types import Command
 import os
-import platform
-import string
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
-BASE_DIR = os.path.expanduser("~")
+app = Flask(__name__, static_folder='static')
+
+
+
 
 @app.route('/')
 def index():
@@ -19,131 +21,177 @@ def styles():
 def script():
     return send_from_directory('static', 'script.js')
 
+
+
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
+    """Handle chat messages"""
     data = request.json
-    user_message = data.get('message', '')
-    file_path = data.get('file_path', '')
-    file_content = data.get('file_content', '')
-    if not user_message:
-        return jsonify({'error': 'No message provided'}), 400
+    message = data.get('message', '')
+    
+    if not message:
+        return jsonify({'error': 'No message'}), 400
+    
     try:
-        initial_state = {"user_query": user_message}
-        if file_path:
-            initial_state["file_path"] = file_path
-        if file_content:
-            initial_state["file_content"] = file_content
-        result = code_agent.invoke(initial_state)
-        response_data = {
-            'response': result.get("llm_result", "No response generated."),
-            'confidence': result.get("confidence", 0.7),
+        # Configuration for checkpointer (requires thread_id)
+        config = {"configurable": {"thread_id": "default"}}
+        
+        # Build initial state
+        state = {"user_query": message}
+        if data.get('file_path'):
+            state["file_path"] = data['file_path']
+        if data.get('file_content'):
+            state["file_content"] = data['file_content']
+        
+        # Run agent
+        result = code_agent.invoke(state, config=config)
+        
+        return jsonify({
+            'response': result.get("llm_result", "No response"),
             'intent': result.get("intent", "unknown"),
-            'needs_clarification': result.get("needs_clarification", False),
-            'clarification_question': result.get("clarification_question", ""),
             'pending_action': result.get("pending_action"),
             'action_data': result.get("action_data"),
-        }
-        return jsonify(response_data)
+            'mcp_logs': result.get("mcp_logs"),
+        })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/mcp/tools', methods=['GET'])
+def get_mcp_tools():
+    """Get list of available MCP tools from consolidated client"""
+    tools = list_mcp_tools()
+    return jsonify({'tools': tools})
+
 
 @app.route('/api/confirm', methods=['POST'])
 def confirm_action():
+    """Handle accept/reject for code changes and resume LangGraph"""
     data = request.json
     action = data.get('action', '')
     action_data = data.get('action_data', {})
     
+    config = {"configurable": {"thread_id": "default"}}
+    
+    # 1. First, persist the change to disk if accepted via MCP tool
     if action == 'accept':
-        code = action_data.get('code', '')
         path = action_data.get('path', '')
-        action_type = action_data.get('type', '')
+        code = action_data.get('code', '')
         
         if path and code:
-            try:
-                with open(path, 'w', encoding='utf-8') as f:
-                    f.write(code)
-                return jsonify({'success': True, 'message': f'✅ Changes applied to {path}'})
-            except Exception as e:
-                return jsonify({'success': False, 'error': str(e)}), 500
-        else:
-            return jsonify({'success': True, 'message': f'✅ {action_type.title()} changes accepted'})
-    
-    elif action == 'reject':
-        return jsonify({'success': True, 'message': '❌ Changes rejected'})
-    
-    return jsonify({'error': 'Invalid action'}), 400
+            # Use MCP write_file instead of manual open()
+            result = call_mcp_tool_sync("write_file", path=path, content=code)
+            if result.startswith("ERROR"):
+                return jsonify({'success': False, 'error': result}), 500
+
+    # 2. Resume the LangGraph by providing the user's action to the interrupt
+    try:
+        # Passing Command(resume=action) to invoke resumes from the interrupt() call
+        result = code_agent.invoke(Command(resume=action), config=config)
+        
+        message = result.get("llm_result", "Action processed")
+        return jsonify({
+            'success': True, 
+            'message': message,
+            'response': message
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f"Failed to resume graph: {str(e)}"}), 500
+
 
 @app.route('/api/files', methods=['GET'])
 def list_files():
-    path = request.args.get('path', BASE_DIR)
+    """List files in a directory"""
+    path = request.args.get('path', os.path.expanduser('~'))
+    
     try:
-        abs_path = os.path.abspath(path)
-    except:
-        return jsonify({'error': 'Invalid path'}), 400
-    if not os.path.exists(abs_path):
-        return jsonify({'error': 'Path does not exist'}), 404
-    if not os.path.isdir(abs_path):
-        return jsonify({'error': 'Path is not a directory'}), 400
-    try:
+        if not os.path.exists(path):
+            return jsonify({'error': 'Path not found'}), 404
+        if not os.path.isdir(path):
+            return jsonify({'error': 'Not a directory'}), 400
+        
         items = []
-        for item in os.listdir(abs_path):
-            item_path = os.path.join(abs_path, item)
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
             try:
-                is_dir = os.path.isdir(item_path)
-                size = os.path.getsize(item_path) if not is_dir else 0
-                items.append({'name': item, 'path': item_path, 'isDirectory': is_dir, 'size': size, 'extension': os.path.splitext(item)[1].lower() if not is_dir else ''})
-            except (PermissionError, OSError):
+                items.append({
+                    'name': item,
+                    'path': item_path,
+                    'isDirectory': os.path.isdir(item_path),
+                    'extension': os.path.splitext(item)[1].lower()
+                })
+            except:
                 continue
+        
+        # Sort: folders first, then files
         items.sort(key=lambda x: (not x['isDirectory'], x['name'].lower()))
-        return jsonify({'currentPath': abs_path, 'parentPath': os.path.dirname(abs_path) if abs_path != os.path.dirname(abs_path) else None, 'items': items})
-    except PermissionError:
-        return jsonify({'error': 'Permission denied'}), 403
+        
+        return jsonify({
+            'currentPath': path,
+            'parentPath': os.path.dirname(path),
+            'items': items
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/file/read', methods=['GET'])
 def read_file():
+    """Read a file"""
     path = request.args.get('path', '')
-    if not path:
-        return jsonify({'error': 'No path provided'}), 400
+    
+    if not path or not os.path.exists(path):
+        return jsonify({'error': 'File not found'}), 404
+    
     try:
-        abs_path = os.path.abspath(path)
-    except:
-        return jsonify({'error': 'Invalid path'}), 400
-    if not os.path.exists(abs_path):
-        return jsonify({'error': 'File does not exist'}), 404
-    if os.path.isdir(abs_path):
-        return jsonify({'error': 'Path is a directory'}), 400
-    if os.path.getsize(abs_path) > 1024 * 1024:
-        return jsonify({'error': 'File too large (max 1MB)'}), 400
-    try:
-        with open(abs_path, 'r', encoding='utf-8', errors='replace') as f:
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
-        return jsonify({'path': abs_path, 'content': content, 'filename': os.path.basename(abs_path)})
+        return jsonify({
+            'path': path,
+            'content': content,
+            'filename': os.path.basename(path)
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/file/write', methods=['POST'])
 def write_file():
+    """Write to a file"""
     data = request.json
     path = data.get('path', '')
     content = data.get('content', '')
+    
     if not path:
-        return jsonify({'error': 'No path provided'}), 400
+        return jsonify({'error': 'No path'}), 400
+    
     try:
-        abs_path = os.path.abspath(path)
-        with open(abs_path, 'w', encoding='utf-8') as f:
+        with open(path, 'w', encoding='utf-8') as f:
             f.write(content)
-        return jsonify({'success': True, 'path': abs_path})
+        return jsonify({'success': True, 'path': path})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/drives', methods=['GET'])
 def list_drives():
+    """List available drives (Windows)"""
+    import platform
+    import string
+    
     if platform.system() == 'Windows':
-        drives = [{'name': f"{letter}:", 'path': f"{letter}:\\"} for letter in string.ascii_uppercase if os.path.exists(f"{letter}:\\")]
+        drives = [{'name': f"{d}:", 'path': f"{d}:\\"} 
+                  for d in string.ascii_uppercase 
+                  if os.path.exists(f"{d}:\\")]
         return jsonify({'drives': drives})
     return jsonify({'drives': [{'name': '/', 'path': '/'}]})
 
+
 if __name__ == '__main__':
+    print("Starting WillOfCode on http://localhost:5000")
     app.run(debug=True, port=5000)

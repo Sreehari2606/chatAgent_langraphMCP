@@ -1,21 +1,21 @@
-from typing import TypedDict, Optional, List
+"""
+WillOfCode: State Definition
+"""
+from typing import TypedDict, List, Dict, Optional, Any
 
-class CodeAgentState(TypedDict, total=False):
+
+class WillOfCodeState(TypedDict):
     user_query: str
+    
     intent: Optional[str]
-    understood_problem: Optional[str]
-    plan: Optional[str]
-    code: Optional[str]
-    explanation: Optional[str]
-    llm_result: Optional[str]
+    
     file_path: Optional[str]
     file_content: Optional[str]
-    updated_content: Optional[str]
-    language: Optional[str]
-    error: Optional[str]
-    conversation_history: Optional[List[dict]]
-    confidence: Optional[float]
-    needs_clarification: Optional[bool]
-    clarification_question: Optional[str]
+    
+    code: Optional[str]
+    llm_result: Optional[str]
+    
     pending_action: Optional[str]
     action_data: Optional[dict]
+    
+    mcp_logs: Optional[List[str]]
