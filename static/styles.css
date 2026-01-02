@@ -2631,3 +2631,63 @@ body {
     padding: 16px 20px;
     border-top: 1px solid var(--border);
 }
+
+/* Editor Control Buttons */
+#closeEditorBtn {
+    color: var(--text-dim);
+}
+
+#closeEditorBtn:hover {
+    background: rgba(255, 71, 87, 0.15);
+    color: var(--error);
+    border-color: rgba(255, 71, 87, 0.4);
+}
+
+#disconnectEditorBtn {
+    color: var(--text-dim);
+}
+
+#disconnectEditorBtn:hover {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent-2);
+    border-color: rgba(0, 212, 255, 0.4);
+}
+
+#disconnectEditorBtn.active {
+    background: rgba(255, 165, 2, 0.2);
+    color: var(--warning);
+    border-color: rgba(255, 165, 2, 0.4);
+}
+
+#disconnectEditorBtn.active:hover {
+    background: rgba(0, 255, 136, 0.15);
+    color: var(--success);
+    border-color: rgba(0, 255, 136, 0.4);
+}
+
+#clearEditorBtn {
+    color: var(--text-dim);
+}
+
+#clearEditorBtn:hover {
+    background: rgba(255, 165, 2, 0.15);
+    color: var(--warning);
+    border-color: rgba(255, 165, 2, 0.4);
+}
+
+/* Header button base style */
+.header-btn {
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.header-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+    border-color: var(--border-focus);
+}

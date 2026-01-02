@@ -1,11 +1,17 @@
 """
-WillOfCode: State Definition
+WillOfCode: Multi-Agent State Definition
+Supports Supervisor Pattern with specialized agents
 """
 from typing import TypedDict, List, Dict, Optional, Any
 
 
 class WillOfCodeState(TypedDict):
     user_query: str
+    
+    # Multi-agent fields
+    current_agent: Optional[str]          # Which agent is currently active
+    agent_history: Optional[List[str]]    # Track which agents have been used
+    agent_outputs: Optional[Dict[str, str]]  # Outputs from each agent
     
     intent: Optional[str]
     

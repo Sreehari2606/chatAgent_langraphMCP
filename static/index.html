@@ -332,6 +332,26 @@
                             <span id="editorFileName">No file open</span>
                         </div>
                         <div class="editor-actions">
+                            <!-- Disconnect from Chat Button -->
+                            <button class="editor-btn" id="disconnectEditorBtn"
+                                title="Disconnect from chat (stop auto-sync)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                </svg>
+                            </button>
+                            <!-- Clear Editor Button -->
+                            <button class="editor-btn" id="clearEditorBtn" title="Clear editor content">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                    </path>
+                                </svg>
+                            </button>
                             <button class="editor-btn" id="editorBrowseBtn" title="Browse files">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
@@ -340,8 +360,10 @@
                                 </svg>
                             </button>
                             <div class="change-buttons hidden" id="changeButtons">
-                                <button class="change-btn accept" id="acceptChangeBtn" title="Accept changes">✓</button>
-                                <button class="change-btn reject" id="rejectChangeBtn" title="Reject changes">✕</button>
+                                <button class="change-btn accept" id="acceptChangeBtn"
+                                    title="Accept changes">&#10003;</button>
+                                <button class="change-btn reject" id="rejectChangeBtn"
+                                    title="Reject changes">&#10005;</button>
                             </div>
                             <button class="editor-btn save" id="editorSaveBtn" title="Save file" disabled>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -351,6 +373,14 @@
                                     <polyline points="7 3 7 8 15 8" />
                                 </svg>
                                 Save
+                            </button>
+                            <!-- Close Editor Button -->
+                            <button class="editor-btn close" id="closeEditorBtn" title="Close editor panel">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
                             </button>
                         </div>
                     </div>
@@ -458,7 +488,7 @@
                             stroke-width="2">
                             <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        Accept & Save
+                        Accept
                     </button>
                 </div>
             </div>

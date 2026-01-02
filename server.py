@@ -30,6 +30,11 @@ def chat():
     data = request.json
     message = data.get('message', '')
     
+    # Debug logging
+    print(f"[DEBUG] Received message: {message}")
+    print(f"[DEBUG] file_path: {data.get('file_path', 'NOT PROVIDED')}")
+    print(f"[DEBUG] file_content length: {len(data.get('file_content', '')) if data.get('file_content') else 'NOT PROVIDED'}")
+    
     if not message:
         return jsonify({'error': 'No message'}), 400
     
@@ -43,6 +48,7 @@ def chat():
             state["file_path"] = data['file_path']
         if data.get('file_content'):
             state["file_content"] = data['file_content']
+            print(f"[DEBUG] Added file_content to state: {len(state['file_content'])} chars")
         
         # Run agent
         result = code_agent.invoke(state, config=config)
@@ -50,6 +56,7 @@ def chat():
         return jsonify({
             'response': result.get("llm_result", "No response"),
             'intent': result.get("intent", "unknown"),
+            'current_agent': result.get("current_agent", "unknown"),
             'pending_action': result.get("pending_action"),
             'action_data': result.get("action_data"),
             'mcp_logs': result.get("mcp_logs"),
@@ -69,39 +76,71 @@ def get_mcp_tools():
 
 @app.route('/api/confirm', methods=['POST'])
 def confirm_action():
-    """Handle accept/reject for code changes and resume LangGraph"""
+    """Handle accept/reject for code changes and file operations.
+    - For code edits: Accept = update editor (temporary), user must Save
+    - For delete: Accept = actually delete the file via MCP
+    """
     data = request.json
     action = data.get('action', '')
     action_data = data.get('action_data', {})
+    action_type = action_data.get('type', 'code_edit')
     
     config = {"configurable": {"thread_id": "default"}}
     
-    # 1. First, persist the change to disk if accepted via MCP tool
-    if action == 'accept':
+    # Handle delete action immediately (destructive)
+    if action == 'accept' and action_type == 'delete':
         path = action_data.get('path', '')
+        if path:
+            result = call_mcp_tool_sync("delete_file", path=path)
+            if result and not result.startswith("ERROR"):
+                return jsonify({
+                    'success': True,
+                    'message': f'File deleted: {path}',
+                    'response': f'File `{path}` has been deleted.',
+                    'action': action
+                })
+            else:
+                return jsonify({'success': False, 'error': f'Delete failed: {result}'}), 500
+    
+    # Handle run_python action
+    if action == 'accept' and action_type == 'run_python':
         code = action_data.get('code', '')
-        
-        if path and code:
-            # Use MCP write_file instead of manual open()
-            result = call_mcp_tool_sync("write_file", path=path, content=code)
-            if result.startswith("ERROR"):
-                return jsonify({'success': False, 'error': result}), 500
-
-    # 2. Resume the LangGraph by providing the user's action to the interrupt
+        if code:
+            result = call_mcp_tool_sync("run_python", code=code)
+            return jsonify({
+                'success': True,
+                'message': 'Python code executed',
+                'response': f'**Execution Result:**\n```\n{result}\n```',
+                'action': action
+            })
+        else:
+            return jsonify({'success': False, 'error': 'No code provided'}), 400
+    
+    # Resume the LangGraph by providing the user's action to the interrupt
     try:
-        # Passing Command(resume=action) to invoke resumes from the interrupt() call
         result = code_agent.invoke(Command(resume=action), config=config)
         
-        message = result.get("llm_result", "Action processed")
+        if action == 'accept':
+            message = "Changes applied to editor. Click Save to write to file."
+        else:
+            message = "Changes rejected."
+            
         return jsonify({
             'success': True, 
             'message': message,
-            'response': message
+            'response': message,
+            'action': action
         })
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': f"Failed to resume graph: {str(e)}"}), 500
+        if action == 'accept':
+            return jsonify({
+                'success': True, 
+                'message': 'Changes applied to editor. Click Save to write to file.',
+                'action': action
+            })
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/files', methods=['GET'])
